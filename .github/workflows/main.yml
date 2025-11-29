@@ -1,0 +1,75 @@
+name: Python CI/CD Pipeline (Lab 6)
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  # 1. СТАДІЯ: LINT (Перевірка стилю коду)
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install flake8
+      - name: Lint code with flake8
+        run: flake8 .
+
+  # 2. СТАДІЯ: TEST (Тести, Coverage >= 50%, Звіти в артефакти)
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install testing tools
+        run: pip install pytest pytest-cov junit-xml
+      
+      - name: Run tests with coverage and generate report
+        # --cov-fail-under=50 - ВИМОГА: Падає, якщо покриття менше 50%
+        run: pytest --cov=. --cov-fail-under=50 --cov-report=xml --junit-xml=test-report.xml
+        
+      # Зберігаємо Test Report як артефакт
+      - name: Upload Test Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-artifact
+          path: test-report.xml
+          
+      # Зберігаємо Coverage Report як артефакт
+      - name: Upload Coverage Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-artifact
+          path: coverage.xml
+
+  # 3. СТАДІЯ: BUILD (Збірка додатку)
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    # КЛЮЧОВА ВИМОГА: запускати build ТІЛЬКИ на гілці main
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create build directory
+        run: mkdir build
+      - name: Copy application files
+        run: cp app.py build/app.py
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-build
+          path: build/

@@ -1,0 +1,80 @@
+name: Python CI/CD Pipeline (Lab 6)
+
+# Запускати пайплайн при пуші або пулл-реквесті до гілок main та dev
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  # 1. СТАДІЯ: LINT (Перевірка стилю коду)
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Встановити Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Встановити залежності
+        run: pip install flake8
+      - name: Запустити Linter (flake8)
+        run: flake8 .
+
+  # 2. СТАДІЯ: TEST (Тести, Coverage > 50%, Генерація звітів)
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Встановити Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Встановити інструменти для тестування та звітів
+        run: pip install pytest pytest-cov junit-xml
+
+      - name: Запустити тести, перевірити 50% Coverage, генерувати XML-звіти
+        run: pytest --cov=. --cov-fail-under=50 --cov-report=xml --junit-xml=test-report.xml
+
+      # Додавання Test Report до вкладки "Checks"
+      - name: Публікація звіту про тести в GitHub Actions
+        uses: joonathan/test-results-action@v1
+        with:
+          report_paths: 'test-report.xml'
+
+      # Генерація Test Report в артефакти
+      - name: Зберегти Test Report як артефакт (для вимоги)
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-artifact
+          path: test-report.xml
+
+      # Генерація Coverage Report в артефакти
+      - name: Зберегти Coverage Report як артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-artifact
+          path: coverage.xml
+
+  # 3. СТАДІЯ: BUILD (Збірка додатку)
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Створення папки build
+        run: mkdir build
+      - name: Копіювання файлів до build
+        run: cp app.py build/
+      - name: Зберегти Build як артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-build
+          path: build/
